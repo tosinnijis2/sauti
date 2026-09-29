@@ -6,4 +6,8 @@ out/
 !.env.example
 .vercel/
 *.log
+*.tsbuildinfo
 .DS_Store
+.env
+.env.local
+.env.*.local

@@ -1,0 +1,9 @@
+import Link from "next/link";
+import { requireAdmin } from "@/lib/admin/auth";
+import { prisma } from "@/lib/prisma";
+
+export default async function DisputedDealsPage() {
+  await requireAdmin();
+  const deals = await prisma.deal.findMany({ where: { status: "DISPUTED" }, include: { product: { select: { item: true } }, buyer: { select: { name: true, email: true } }, seller: { select: { name: true, email: true } } }, orderBy: [{ disputedAt: "desc" }, { createdAt: "desc" }], take: 100 });
+  return <><header><p className="text-xs font-bold uppercase text-[#996066]">Deal administration</p><h1 className="mt-2 text-3xl font-bold">Disputed deals</h1><p className="mt-3 text-sm text-[#6f626b]">Read-only visibility. Dispute resolution is not implemented.</p></header>{deals.length ? <div className="mt-7 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead><tr className="border-y border-[#eadfdf]"><th className="p-3">Deal</th><th className="p-3">Listing</th><th className="p-3">Participants</th><th className="p-3">Created</th><th className="p-3">Disputed</th><th className="p-3">Reason</th></tr></thead><tbody>{deals.map(deal => <tr key={deal.id} className="border-b border-[#eadfdf]"><td className="p-3 font-mono text-xs">{deal.id}</td><td className="p-3"><Link href={`/market/${deal.productId}`} className="underline">{deal.product.item}</Link></td><td className="p-3">Buyer: {deal.buyer.name} ({deal.buyer.email})<br />Seller: {deal.seller.name} ({deal.seller.email})</td><td className="p-3">{deal.createdAt.toISOString().replace("T", " ").slice(0, 16)} UTC</td><td className="p-3">{deal.disputedAt?.toISOString().replace("T", " ").slice(0, 16) ?? "Unknown"} UTC</td><td className="max-w-sm break-words p-3">{deal.disputeReason ?? "No reason provided"}</td></tr>)}</tbody></table></div> : <p className="mt-8 border-y border-dashed py-8 text-sm text-[#6f626b]">No disputed deals.</p>}</>;
+}

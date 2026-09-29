@@ -19,7 +19,8 @@ function sessionSecret() {
 }
 
 export async function createSession(userId: string) {
-  const token = await new SignJWT({})
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { sessionVersion: true } });
+  const token = await new SignJWT({ version: user.sessionVersion })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
     .setIssuedAt()
@@ -55,7 +56,9 @@ export async function getSessionUserId() {
       algorithms: ["HS256"],
     });
 
-    return typeof payload.sub === "string" ? payload.sub : null;
+    if (typeof payload.sub !== "string") return null;
+    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { sessionVersion: true } });
+    return user && user.sessionVersion === payload.version ? payload.sub : null;
   } catch {
     return null;
   }
@@ -80,6 +83,8 @@ export async function getCurrentUser() {
       location: true,
       imageUrl: true,
       role: true,
+      country: true,
+      emailVerifiedAt: true,
     },
   });
 }

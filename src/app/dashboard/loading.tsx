@@ -1,0 +1,3 @@
+export default function DashboardLoading() {
+  return <main role="status" aria-label="Loading dashboard" className="p-6 md:p-10"><div className="h-9 w-60 max-w-full rounded bg-[#e6e4e4] motion-safe:animate-pulse" /><div className="my-6 flex flex-wrap gap-3">{[0, 1, 2].map(key => <div key={key} className="h-11 w-32 rounded-lg bg-[#edf1ef] motion-safe:animate-pulse" />)}</div><div className="h-20 border-y border-[#ded5da] bg-[#f3f0f0] motion-safe:animate-pulse" /><div className="my-8 h-6 w-40 rounded bg-[#e6e4e4] motion-safe:animate-pulse" /><div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map(key => <div key={key} className="aspect-[4/5] rounded-lg bg-[#edf1ef] motion-safe:animate-pulse" />)}</div></main>;
+}

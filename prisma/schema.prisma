@@ -15,9 +15,161 @@ model User {
   location     String?
   imageUrl     String?
   role         Role      @default(USER)
+  country      String?
+  sessionVersion Int @default(0)
+  resets PasswordReset[]
+  emailVerifiedAt DateTime?
+  emailVerifications EmailVerification[]
+  dealsSold Deal[] @relation("DealSeller")
+  dealsBought Deal[] @relation("DealBuyer")
+  reviewsWritten Review[] @relation("ReviewReviewer")
+  reviewsReceived Review[] @relation("ReviewTarget")
+  reviewsModerated Review[] @relation("ReviewModerator")
+  reviewReports ReviewReport[]
+  reviewModerationEvents ReviewModerationEvent[] @relation("ReviewEventModerator")
+  buying Conversation[] @relation("Buyer")
+  selling Conversation[] @relation("Seller")
+  messages Message[]
+  blocks UserBlock[] @relation("Blocker")
+  blockedBy UserBlock[] @relation("Blocked")
+  reports MessageReport[]
   listings     Product[]
+  favorites    Favorite[]
+  priceWatches PriceWatch[]
+  notifications Notification[]
+  notificationPreference NotificationPreference?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+model PriceWatch {
+  id                String              @id @default(cuid())
+  userId            String
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commodity         Commodity
+  variety           CommodityVariety?
+  grade             SellerGrade?
+  normalizedUnit    ListingUnit
+  country           String?
+  location          String?
+  cohortKey         String
+  condition         PriceWatchCondition
+  threshold         Decimal             @db.Decimal(30, 12)
+  enabled           Boolean             @default(true)
+  lastConditionMet  Boolean?
+  lastValue         Decimal?            @db.Decimal(30, 12)
+  lastEvaluatedAt   DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  notifications     Notification[]
+
+  @@unique([userId, cohortKey, condition, threshold])
+  @@index([enabled, id])
+  @@index([userId, createdAt])
+}
+
+enum PriceWatchCondition {
+  BELOW
+  ABOVE
+  PERCENT_DROP
+  PERCENT_RISE
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  watchId   String?
+  watch     PriceWatch?      @relation(fields: [watchId], references: [id], onDelete: SetNull)
+  type      NotificationType
+  title     String
+  message   String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  emailDelivery NotificationEmailDelivery?
+
+  @@index([userId, readAt, createdAt])
+  @@index([watchId, createdAt])
+}
+
+model NotificationEmailDelivery {
+  notificationId  String              @id
+  notification    Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  status          EmailDeliveryStatus @default(PENDING)
+  cohort          String
+  trigger         String
+  currentMedian   Decimal             @db.Decimal(30, 12)
+  unit            String
+  country         String?
+  location        String?
+  href            String
+  attemptedAt     DateTime?
+  sentAt          DateTime?
+  failureCount    Int                 @default(0)
+  lastErrorCode   String?
+  nextAttemptAt   DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([status, nextAttemptAt])
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum NotificationType {
+  PRICE_ALERT
+  REVIEW_MODERATION
+}
+
+model NotificationPreference {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inAppPriceAlerts   Boolean  @default(true)
+  emailPriceAlerts   Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model PriceWatchEvaluationRun {
+  id                   String               @id @default(cuid())
+  source               PriceWatchRunSource
+  status               PriceWatchRunStatus @default(RUNNING)
+  startedAt            DateTime             @default(now())
+  completedAt          DateTime?
+  watchesScanned       Int                  @default(0)
+  watchesEvaluated     Int                  @default(0)
+  notificationsCreated Int                  @default(0)
+  watchesSkipped       Int                  @default(0)
+  errors               Int                  @default(0)
+  durationMs           Int?
+
+  @@index([startedAt])
+  @@index([status, startedAt])
+}
+
+model PriceWatchEvaluatorLease {
+  id         String   @id
+  token      String
+  acquiredAt DateTime
+  expiresAt  DateTime
+}
+
+enum PriceWatchRunSource {
+  MANUAL
+  SCHEDULED
+}
+
+enum PriceWatchRunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  SKIPPED
 }
 
 model Product {
@@ -25,9 +177,24 @@ model Product {
   item        String
   category    String
   price       Decimal  @db.Decimal(12, 2)
+  quantity    Decimal? @db.Decimal(12, 3)
+  unit        ListingUnit?
+  status      ListingStatus @default(ACTIVE)
+  commodity   Commodity?
+  variety     CommodityVariety?
+  grade       SellerGrade?
+  packageQuantity Decimal? @db.Decimal(12, 3)
+  packageUnit ListingUnit?
   location    String
   description String
   imageUrl    String?
+  imagePublicId String?
+  country     String?
+  conversations Conversation[]
+  favorites Favorite[]
+  priceSnapshots PriceSnapshot[]
+  views ProductView[]
+  deals Deal[]
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
@@ -38,7 +205,322 @@ model Product {
   @@index([ownerId])
 }
 
+model ProductView {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  viewerKey String
+  createdAt DateTime @default(now())
+
+  @@unique([productId, viewerKey])
+  @@index([productId, createdAt])
+  @@index([viewerKey])
+}
+
+model PriceSnapshot {
+  id              String   @id @default(cuid())
+  productId       String?
+  productKey      String
+  product         Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  commodity       Commodity
+  variety         CommodityVariety?
+  grade           SellerGrade?
+  normalizedUnit  ListingUnit
+  normalizedPrice Decimal  @db.Decimal(30, 12)
+  category        String
+  country         String?
+  location        String?
+  stateHash       String
+  captureReason   PriceSnapshotReason @default(CHANGE)
+  capturedAt      DateTime @default(now())
+
+  @@index([capturedAt])
+  @@index([commodity])
+  @@index([normalizedUnit])
+  @@index([country, location])
+  @@index([productKey, capturedAt])
+  @@index([commodity, variety, grade, normalizedUnit, capturedAt])
+}
+
+enum PriceSnapshotReason {
+  CREATE
+  CHANGE
+  REACTIVATED
+  BASELINE
+  REPAIR
+}
+
+enum ListingStatus {
+  ACTIVE
+  RESERVED
+  SOLD
+  INACTIVE
+}
+
+enum Commodity {
+  MAIZE
+  RICE
+  BEANS
+  WHEAT
+  CASSAVA
+  POTATOES
+  TOMATOES
+  ONIONS
+  BANANAS
+  COFFEE
+}
+
+enum CommodityVariety {
+  WHITE
+  YELLOW
+  BASMATI
+  LONG_GRAIN
+}
+
+enum SellerGrade {
+  GRADE_1
+  GRADE_2
+  STANDARD
+}
+
+enum ListingUnit {
+  ITEM
+  KG
+  G
+  TONNE
+  LITRE
+  ML
+  DOZEN
+  BAG
+  SACK
+  BOX
+  CRATE
+  BUNDLE
+}
+
 enum Role {
   USER
   ADMIN
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId, createdAt])
+  @@index([productId])
+}
+
+model PasswordReset {
+  tokenHash String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+
+model EmailVerification {
+  tokenHash String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Conversation {
+  id String @id @default(cuid())
+  productId String?
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName String
+  buyerId String
+  buyer User @relation("Buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId String
+  seller User @relation("Seller", fields: [sellerId], references: [id], onDelete: Cascade)
+  messages Message[]
+  updatedAt DateTime @default(now())
+  deal Deal?
+  @@unique([productId, buyerId])
+  @@index([sellerId, updatedAt])
+  @@index([buyerId, updatedAt])
+}
+
+model Deal {
+  id String @id @default(cuid())
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  conversationId String @unique
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sellerId String
+  seller User @relation("DealSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  buyerId String
+  buyer User @relation("DealBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  status DealStatus @default(PENDING)
+  disputeReason String?
+  disputedAt DateTime?
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+  reviews Review[]
+  @@index([sellerId, createdAt])
+  @@index([buyerId, createdAt])
+  @@index([status, createdAt])
+}
+
+model Review {
+  id String @id @default(cuid())
+  dealId String
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  reviewerId String
+  reviewer User @relation("ReviewReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  targetId String
+  target User @relation("ReviewTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  rating Int
+  comment String?
+  status ReviewStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  moderatedAt DateTime?
+  publishedAt DateTime?
+  hiddenAt DateTime?
+  removedAt DateTime?
+  moderatedById String?
+  moderatedBy User? @relation("ReviewModerator", fields: [moderatedById], references: [id], onDelete: SetNull)
+  reports ReviewReport[]
+  moderationEvents ReviewModerationEvent[]
+
+  @@unique([dealId, reviewerId])
+  @@index([targetId, status, createdAt])
+  @@index([status, createdAt])
+}
+
+model ReviewReport {
+  id String @id @default(cuid())
+  reviewId String
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  reporterId String
+  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  reason ReviewReportReason
+  note String?
+  status ReviewReportStatus @default(OPEN)
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+
+  @@index([reviewId, status, createdAt])
+  @@index([reporterId, createdAt])
+  @@index([status, reason, createdAt])
+}
+
+model ReviewModerationEvent {
+  id String @id @default(cuid())
+  reviewId String
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  moderatorId String?
+  moderator User? @relation("ReviewEventModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
+  moderatorName String
+  action ReviewModerationAction
+  reason ReviewModerationReason
+  note String?
+  createdAt DateTime @default(now())
+
+  @@index([reviewId, createdAt])
+  @@index([moderatorId, createdAt])
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  HIDDEN
+  REMOVED
+}
+
+enum ReviewReportReason {
+  HARASSMENT
+  SPAM
+  FALSE_INFORMATION
+  PERSONAL_INFORMATION
+  OFF_TOPIC
+  OTHER
+}
+
+enum ReviewReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum ReviewModerationAction {
+  PUBLISHED
+  HIDDEN
+  REMOVED
+}
+
+enum ReviewModerationReason {
+  POLICY_VIOLATION
+  HARASSMENT
+  SPAM
+  PRIVACY
+  FRAUD_OR_MISREPRESENTATION
+  OTHER
+}
+
+enum DealStatus {
+  PENDING
+  BUYER_CONFIRMED
+  SELLER_CONFIRMED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+model Message {
+  id String @id @default(cuid())
+  authorId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  country String?
+  body String
+  hidden Boolean @default(false)
+  createdAt DateTime @default(now())
+  reports MessageReport[]
+  @@index([conversationId, createdAt])
+  @@index([country, createdAt])
+}
+
+model UserBlock {
+  blockerId String
+  blockedId String
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  @@id([blockerId, blockedId])
+}
+
+model MessageReport {
+  id String @id @default(cuid())
+  messageId String
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reporterId String
+  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  reason String
+  resolved Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@unique([messageId, reporterId])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  adminId String
+  action String
+  targetType String
+  targetId String
+  reason String
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+  @@index([targetType, targetId])
 }

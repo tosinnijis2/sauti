@@ -21,3 +21,5 @@ body {
 }
 a { text-decoration: none; }
 button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 70%, white); outline-offset: 2px; }

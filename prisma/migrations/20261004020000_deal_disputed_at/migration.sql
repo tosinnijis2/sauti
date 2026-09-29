@@ -1,0 +1,1 @@
+ALTER TABLE "Deal" ADD COLUMN "disputedAt" TIMESTAMP(3);

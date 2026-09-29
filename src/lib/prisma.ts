@@ -11,8 +11,14 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+const databaseUrl = new URL(connectionString);
+const localPrisma = ["localhost", "127.0.0.1"].includes(databaseUrl.hostname) && databaseUrl.port === "51214";
+
 const adapter = new PrismaPg({
   connectionString,
+  // Local Prisma Postgres is single-connection; queue parallel relation queries.
+  max: localPrisma ? 1 : 10,
+  idleTimeoutMillis: localPrisma ? 1000 : 10000,
 });
 
 export const prisma =
@@ -21,6 +27,4 @@ export const prisma =
     adapter,
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.prisma = prisma;

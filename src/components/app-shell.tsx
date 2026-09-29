@@ -1,29 +1,52 @@
 import Link from "next/link";
-import { LayoutDashboard, PackagePlus, Store, Tags, UserRound } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { logoutAction } from "@/app/actions/auth";
+import { DesktopNavigation, MobileNavigation } from "@/components/app-navigation";
+import { requireUser } from "@/lib/auth";
+import { unreadNotificationCount } from "@/lib/notifications";
 
-const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/market", label: "Market prices", icon: Tags },
-  { href: "/listings", label: "My listings", icon: Store },
-  { href: "/listings/new", label: "Add product", icon: PackagePlus },
-  { href: "/profile", label: "Profile", icon: UserRound },
-];
+export async function AppShell({ children }: { children: React.ReactNode }) {
+  const user = await requireUser();
+  const unreadCount = await unreadNotificationCount(user.id);
 
-export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#fffaf8] md:grid md:grid-cols-[250px_1fr]">
-      <aside className="bg-[#20141d] p-6 text-white">
-        <Link href="/" className="text-3xl font-black text-[#fe7a7c]">Sauti.</Link>
-        <nav className="mt-10 grid gap-2">
-          {nav.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-white/80 hover:bg-white/10 hover:text-white">
-              <Icon size={18} />
-              {label}
-            </Link>
-          ))}
-        </nav>
+      <aside className="sticky top-0 hidden h-screen flex-col overflow-y-auto bg-[#20141d] p-6 text-white md:flex">
+        <div>
+          <Link href="/" className="text-3xl font-black text-[#fe7a7c]">Sauti.</Link>
+          <p className="mt-3 truncate text-sm font-semibold text-white/60">{user.name}</p>
+          <DesktopNavigation unreadCount={unreadCount} />
+          {user.role === "ADMIN" && <Link href="/admin/dashboard" className="mt-4 block rounded-lg border border-white/20 px-4 py-3 text-sm font-bold text-[#fe7a7c]">Administration</Link>}
+        </div>
+        <form action={logoutAction} className="mt-auto pt-8">
+          <button type="submit" className="flex min-h-12 w-full items-center gap-3 rounded-lg px-4 text-sm font-semibold text-white/60 transition-colors hover:bg-white/5 hover:text-white">
+            <LogOut size={18} />
+            Log out
+          </button>
+        </form>
       </aside>
-      <main className="p-6 md:p-10">{children}</main>
+
+      <div className="md:hidden">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/10 bg-[#20141d]/95 px-4 text-white backdrop-blur-xl">
+          <Link href="/dashboard" className="text-2xl font-black text-[#fe7a7c]">Sauti.</Link>
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="max-w-28 truncate text-xs font-semibold text-white/60">{user.name}</span>
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                aria-label="Log out"
+                title="Log out"
+                className="grid size-11 place-items-center rounded-full text-white/65 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <LogOut size={19} />
+              </button>
+            </form>
+          </div>
+        </header>
+      </div>
+
+      <main className="min-w-0 p-5 pb-28 md:p-10">{user.role === "ADMIN" && <div className="mb-5 md:hidden"><Link href="/admin/dashboard" className="text-sm font-bold underline">Administration</Link></div>}{children}</main>
+      <MobileNavigation unreadCount={unreadCount} />
     </div>
   );
 }

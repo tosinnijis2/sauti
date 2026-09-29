@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { CountrySelect } from "./country-select";
+import { AuthForm, AuthSubmit } from "./auth-form";
 import {
   loginAction,
   registerAction,
@@ -9,6 +11,8 @@ type AuthCardProps = {
   error?: string;
   success?: string;
   defaultEmail?: string;
+  returnTo?: string;
+  notice?: string;
 };
 
 export function AuthCard({
@@ -16,6 +20,8 @@ export function AuthCard({
   error,
   success,
   defaultEmail,
+  returnTo,
+  notice,
 }: AuthCardProps) {
   const isLogin = mode === "login";
 
@@ -60,80 +66,98 @@ export function AuthCard({
           </div>
         )}
 
-        <form
+        <AuthForm
+          mode={mode}
+          error={error}
           action={isLogin ? loginAction : registerAction}
-          className="mt-8 grid gap-4"
         >
+          {isLogin && <input type="hidden" name="next" value={returnTo ?? "/dashboard"} />}
+          {notice && <p role="status" className="text-sm text-[#47715f]">{notice}</p>}
           {!isLogin && (
-            <input
-              name="name"
-              type="text"
-              className={inputClass}
-              placeholder="Full name"
-              autoComplete="name"
-              required
-            />
+            <label className="grid gap-2 text-sm font-bold text-[#20141d]">
+              Full name
+              <input
+                name="name"
+                type="text"
+                className={inputClass}
+                autoComplete="name"
+                maxLength={100}
+                required
+              />
+            </label>
           )}
 
           {!isLogin && (
-            <input
-              name="phone"
-              type="tel"
-              className={inputClass}
-              placeholder="Phone number"
-              autoComplete="tel"
-              required
-            />
+            <label className="grid gap-2 text-sm font-bold text-[#20141d]">
+              Phone
+              <input
+                name="phone"
+                type="tel"
+                className={inputClass}
+                autoComplete="tel"
+                maxLength={30}
+                required
+              />
+            </label>
           )}
 
-          <input
-            name="email"
-            type="email"
-            className={inputClass}
-            placeholder="Email address"
-            autoComplete="email"
-            defaultValue={isLogin ? defaultEmail : undefined}
-            required
-          />
-
-          <input
-            name="password"
-            type="password"
-            className={inputClass}
-            placeholder="Password"
-            autoComplete={isLogin ? "current-password" : "new-password"}
-            required
-          />
-
-          {!isLogin && (
+          <label className="grid gap-2 text-sm font-bold text-[#20141d]">
+            Email
             <input
-              name="confirmPassword"
+              name="email"
+              type="email"
+              className={inputClass}
+              autoComplete="email"
+              defaultValue={isLogin ? defaultEmail : undefined}
+              maxLength={254}
+              required
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-bold text-[#20141d]">
+            Password
+            <input
+              name="password"
               type="password"
               className={inputClass}
-              placeholder="Re-enter password"
-              autoComplete="new-password"
+              autoComplete={isLogin ? "current-password" : "new-password"}
+              minLength={isLogin ? undefined : 8}
               required
             />
+          </label>
+
+          {!isLogin && (
+            <label className="grid gap-2 text-sm font-bold text-[#20141d]">
+              Confirm password
+              <input
+                name="confirmPassword"
+                type="password"
+                className={inputClass}
+                autoComplete="new-password"
+                minLength={8}
+                required
+              />
+            </label>
           )}
 
           {!isLogin && (
-            <input
-              name="location"
-              type="text"
-              className={inputClass}
-              placeholder="Location"
-              autoComplete="address-level2"
-              required
-            />
+            <label className="grid gap-2 text-sm font-bold text-[#20141d]">
+              Location
+              <input
+                name="location"
+                type="text"
+                className={inputClass}
+                autoComplete="address-level2"
+                maxLength={120}
+                required
+              />
+            </label>
           )}
 
-          <button
-            type="submit"
-            className="mt-2 rounded-xl bg-[#20141d] px-4 py-3 font-bold text-white transition hover:bg-[#342330]"
-          >
-            {isLogin ? "Sign in" : "Create account"}
-          </button>
-        </form>
+          {!isLogin && <CountrySelect />}
+          <AuthSubmit login={isLogin} />
+          {isLogin && <Link href="/forgot-password" className="text-center text-sm underline">Forgot password?</Link>}
+        </AuthForm>
 
         <p className="mt-6 text-center text-sm text-[#6f626b]">
           {isLogin

@@ -1,0 +1,3 @@
+export default function MarketLoading() {
+  return <div role="status" aria-label="Loading marketplace" className="mx-auto max-w-7xl p-6"><div className="mb-8 h-8 w-64 rounded bg-[#e1e5e2] motion-safe:animate-pulse" /><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="overflow-hidden rounded-lg border border-[#e1e5e2]"><div className="aspect-[4/3] bg-[#e1e5e2] motion-safe:animate-pulse" /><div className="space-y-3 p-4"><div className="h-4 w-2/3 bg-[#e1e5e2]" /><div className="h-6 w-1/3 bg-[#e1e5e2]" /></div></div>)}</div><span className="sr-only">Loading marketplace</span></div>;
+}
