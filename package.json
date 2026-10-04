@@ -15,12 +15,13 @@
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
-    "@prisma/client": "7.10.0",
+    "@prisma/client": "^7.10.0",
     "bcryptjs": "^3.0.3",
+    "dotenv": "^18.0.5",
     "jose": "^6.2.12",
     "lucide-react": "latest",
     "next": "latest",
-    "pg": "^8.23.0",
+    "pg": "^8.23.1",
     "react": "latest",
     "react-dom": "latest",
     "zod": "^4.6.5"
@@ -28,12 +29,14 @@
   "devDependencies": {
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
+    "@types/pg": "^8.23.1",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
-    "prisma": "7.10.0",
+    "prisma": "^7.10.0",
     "tailwindcss": "latest",
+    "tsx": "^4.23.15",
     "typescript": "latest"
   }
 }
