@@ -74,7 +74,7 @@ try {
   const anonymousAdmin = await fetch(`${base}/admin/evaluations`, { redirect: "manual" }); assert.ok([302, 303, 307, 308].includes(anonymousAdmin.status));
   assert.equal((await fetch(`${base}/admin/evaluations`, { headers: { Cookie: `sauti_session=${await token(member)}` }, redirect: "manual" })).status, 404);
   const adminPage = await fetch(`${base}/admin/evaluations`, { headers: { Cookie: `sauti_session=${await token(admin)}` } });
-  assert.equal(adminPage.status, 200); const adminHtml = await adminPage.text(); assert.ok(adminHtml.includes("Evaluator runs") && adminHtml.includes("Recent run history")); assert.ok(!adminHtml.includes(user.email));
+  assert.equal(adminPage.status, 200); const adminHtml = await adminPage.text(); assert.ok(adminHtml.includes("Scheduled operations") && adminHtml.includes("Run history") && adminHtml.includes("Cloud asset cleanup jobs")); assert.ok(!adminHtml.includes(user.email));
   console.log("PASS ALERT OPERATIONS: endpoint secret, lease overlap, durable success/partial/failure metrics, admin-only monitoring, private pagination/read state, and disabled email delivery.");
 } finally {
   await prisma.priceWatchEvaluatorLease.deleteMany({ where: { id: "price-watch-evaluator" } });

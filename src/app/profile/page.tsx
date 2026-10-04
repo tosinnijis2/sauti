@@ -3,6 +3,8 @@ import { AppShell } from "@/components/app-shell";
 import { requireUser } from "@/lib/auth";
 import { CountrySelect } from "@/components/country-select";
 import { sendEmailVerificationAction } from "@/app/actions/email-verification";
+import { ProfilePhotoField } from "@/components/profile-photo-field";
+import { fieldClass as inputClass, primaryButtonClass } from "@/components/ui";
 
 export default async function ProfilePage({
   searchParams,
@@ -10,9 +12,6 @@ export default async function ProfilePage({
   searchParams: Promise<{ error?: string; updated?: string; notice?: string }>;
 }) {
   const [user, params] = await Promise.all([requireUser(), searchParams]);
-  const inputClass =
-    "rounded-xl border border-[#eadfdf] px-4 py-3 outline-none transition focus:border-[#fe7a7c]";
-
   return (
     <AppShell>
       <h1 className="text-4xl font-black">Profile</h1>
@@ -32,7 +31,9 @@ export default async function ProfilePage({
 
       <section className="mt-8 flex max-w-2xl flex-wrap items-center justify-between gap-4 rounded-lg border border-[#eadfdf] bg-white p-5"><div><h2 className="font-bold">Email verification</h2><p className="mt-1 text-sm text-[#6f626b]">{user.emailVerifiedAt ? "Verified" : "Email not verified"}</p>{params.notice === "verification-sent" && <p role="status" className="mt-2 text-sm font-semibold text-green-800">Verification email sent. Check your inbox and spam folder.</p>}{params.notice === "verification-rate-limited" && <p role="status" className="mt-2 text-sm font-semibold text-[#9d334b]">Please wait a minute before requesting another verification email.</p>}{params.notice === "verification-unavailable" && <p role="alert" className="mt-2 text-sm font-semibold text-[#9d334b]">Verification email is not available for this installation yet.</p>}{params.notice === "verification-invalid" && <p role="alert" className="mt-2 text-sm font-semibold text-[#9d334b]">This verification link has expired or was already used.</p>}</div>{user.emailVerifiedAt ? <span className="rounded-lg bg-green-50 px-4 py-3 text-sm font-bold text-green-800">Verified</span> : <form action={sendEmailVerificationAction}><button className="min-h-11 rounded-lg bg-[#20141d] px-4 text-sm font-bold text-white">Send verification email</button></form>}</section>
 
-      <form action={updateProfileAction} className="mt-8 grid max-w-2xl gap-5 rounded-3xl border border-[#eadfdf] bg-white p-7">
+      <form action={updateProfileAction} className="mt-8 grid max-w-2xl gap-6 rounded-lg border border-[#eadfdf] bg-white p-7">
+        <ProfilePhotoField name={user.name} imageUrl={user.imageUrl} />
+        <div className="border-t border-[#eadfdf]" />
         <CountrySelect value={user.country} />
         <label className="grid gap-2 text-sm font-bold text-[#20141d]">
           Full name
@@ -50,7 +51,7 @@ export default async function ProfilePage({
           Location
           <input name="location" className={inputClass} defaultValue={user.location ?? ""} autoComplete="address-level2" required />
         </label>
-        <button type="submit" className="rounded-xl bg-[#20141d] px-5 py-3 font-bold text-white transition hover:bg-[#342330]">
+        <button type="submit" className={primaryButtonClass}>
           Save profile
         </button>
       </form>

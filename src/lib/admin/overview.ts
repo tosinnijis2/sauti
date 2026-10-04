@@ -18,7 +18,7 @@ export async function getOverview(days: number) {
     prisma.user.count(),
     prisma.product.count(),
     prisma.user.count({ where: { listings: { some: {} } } }),
-    prisma.messageReport.count({ where: { resolved: false } }),
+    Promise.all([prisma.messageReport.count({ where: { resolved: false } }), prisma.safetyReport.count({ where: { status: "OPEN" } })]).then(([legacy, safety]) => legacy + safety),
     prisma.user.count({ where: { createdAt: { gte: start, lte: end } } }),
     prisma.user.count({ where: { createdAt: { gte: previous, lt: start } } }),
     prisma.product.count({ where: { createdAt: { gte: start, lte: end } } }),

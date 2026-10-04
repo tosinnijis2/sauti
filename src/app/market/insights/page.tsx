@@ -16,15 +16,18 @@ import { cohortLabel } from "@/lib/commodities";
 import { InsightCommodityFilters } from "@/components/insight-commodity-filters";
 import { historicalPriceHistory } from "@/lib/price-history";
 import { PriceHistoryChart } from "@/components/price-history-chart";
+import { CompletedDealSignals } from "@/components/completed-deal-signals";
+import { completedDealInsights } from "@/lib/completed-deal-insights";
 
 export default async function InsightsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const rawParams = await searchParams;
   const filters = insightFiltersSchema.parse(rawParams);
   const { q, category, location, country, unit, commodity, variety, grade, range } = filters;
   const unitLabel = UNIT_RULES[unit].label;
-  const [data, history, categories, user] = await Promise.all([
+  const [data, history, completedDeals, categories, user] = await Promise.all([
     marketInsights(filters),
     historicalPriceHistory(filters),
+    completedDealInsights(filters),
     prisma.product.groupBy({ by: ["category"], where: { status: "ACTIVE" }, orderBy: { category: "asc" } }),
     getCurrentUser(),
   ]);
@@ -34,7 +37,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
   const fieldClass = "min-w-0 rounded-lg border border-[#d9cccc] bg-white px-3 py-3 text-sm font-normal";
   return <MarketShell>
     <Link href="/market" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#47715f] hover:underline"><ArrowLeft size={16} aria-hidden="true" />Marketplace</Link>
-    <header className="mt-4"><p className="text-xs font-bold uppercase text-[#47715f]">Sauti asking prices</p><h1 className="mt-2 text-3xl font-bold">Market Insights</h1><p className="mt-3 max-w-2xl text-sm text-[#6f626b]">Active listing prices in USD per {unitLabel}, not completed-sale prices or official market prices.</p></header>
+    <header className="mt-4"><p className="text-xs font-bold uppercase text-[#47715f]">Asking price</p><h1 className="mt-2 text-3xl font-bold">Market Insights</h1><p className="mt-3 max-w-2xl text-sm text-[#6f626b]">Prices sellers are currently asking in USD per {unitLabel}. Asking-price analytics remain separate from completed-deal signals.</p></header>
     <form method="get" className="mt-7 grid min-w-0 gap-3 border-y border-[#eadfdf] py-5 sm:grid-cols-2 xl:grid-cols-3">
       <InsightCommodityFilters key={JSON.stringify(filters)} groups={data.groups} initial={{ commodity, variety, grade }} fieldClass={fieldClass} />
       <label className="grid min-w-0 gap-2 text-sm font-bold">Product or search term<input name="q" defaultValue={q} maxLength={120} placeholder="Product or description" className={fieldClass} /></label>
@@ -57,6 +60,8 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
     {commodity && <section className="mt-8 border-y border-[#eadfdf] py-6"><div className="flex items-center gap-2"><BellRing size={20} className="text-[#9d334b]" /><h2 className="text-xl font-bold">Watch this price</h2></div><p className="mt-2 text-sm text-[#6f626b]">{cohortLabel(commodity, variety || null, grade || null)} · USD/{unitLabel}{country ? ` · ${countryName(country)}` : ""}{location ? ` · ${location}` : ""}</p>{typeof rawParams.error === "string" && <p className="mt-3 text-sm font-semibold text-[#9d334b]">{rawParams.error}</p>}{user ? <form action={createPriceWatchAction} className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"><input type="hidden" name="commodity" value={commodity} /><input type="hidden" name="variety" value={variety} /><input type="hidden" name="grade" value={grade} /><input type="hidden" name="normalizedUnit" value={unit} /><input type="hidden" name="country" value={country} /><input type="hidden" name="location" value={location} /><label className="grid gap-2 text-sm font-bold">Notify me when<select name="condition" className={fieldClass}><option value="BELOW">Median falls below</option><option value="ABOVE">Median rises above</option><option value="PERCENT_DROP">Median drops by</option><option value="PERCENT_RISE">Median rises by</option></select></label><label className="grid gap-2 text-sm font-bold">Threshold<input name="threshold" required inputMode="decimal" placeholder="1.20 or 10" className={fieldClass} /></label><button className="mt-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-[#20141d] px-5 text-sm font-bold text-white"><BellRing size={18} />Create watch</button></form> : <Link href={`/login?next=${encodeURIComponent("/market/insights?" + new URLSearchParams({ commodity, variety, grade, unit, country, location, range }))}`} className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-[#20141d] px-4 text-sm font-bold text-white">Sign in to create a watch</Link>}</section>}
 
     {commodity && <PriceHistoryChart history={history} unit={unit} cohort={cohortLabel(commodity, variety || null, grade || null)} />}
+
+    {commodity && <CompletedDealSignals data={completedDeals} unit={unit} />}
 
     <section aria-label="Median asking price by location" className="mt-10">
       <h2 className="text-xl font-bold">Median asking price by location</h2>

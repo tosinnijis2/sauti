@@ -2,8 +2,9 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { canReadConversation, startConversation, ChatError } from "@/lib/chat";
+import { blockInteraction, InteractionError, unblockInteraction } from "@/lib/interactions";
+import { prisma } from "@/lib/prisma";
 
 export async function contactSeller(form: FormData) {
   const user = await requireUser();
@@ -18,9 +19,8 @@ export async function contactSeller(form: FormData) {
 export async function blockUser(form: FormData) {
   const user = await requireUser();
   const blockedId = String(form.get("userId") ?? "");
-  if (blockedId === user.id || !await prisma.user.findUnique({ where: { id: blockedId }, select: { id: true } })) return;
-  if (form.get("unblock") === "1") await prisma.userBlock.deleteMany({ where: { blockerId: user.id, blockedId } });
-  else await prisma.userBlock.upsert({ where: { blockerId_blockedId: { blockerId: user.id, blockedId } }, create: { blockerId: user.id, blockedId }, update: {} });
+  try { if (form.get("unblock") === "1") await unblockInteraction(user.id, blockedId); else await blockInteraction(user.id, blockedId); }
+  catch (error) { if (!(error instanceof InteractionError)) throw error; }
   revalidatePath("/messages", "layout");
 }
 

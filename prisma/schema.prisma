@@ -14,6 +14,7 @@ model User {
   passwordHash String
   location     String?
   imageUrl     String?
+  imagePublicId String?
   role         Role      @default(USER)
   country      String?
   sessionVersion Int @default(0)
@@ -33,9 +34,13 @@ model User {
   blocks UserBlock[] @relation("Blocker")
   blockedBy UserBlock[] @relation("Blocked")
   reports MessageReport[]
+  safetyReportsMade SafetyReport[] @relation("SafetyReporter")
+  safetyReportsAgainst SafetyReport[] @relation("SafetyTargetUser")
+  safetyReportsModerated SafetyReport[] @relation("SafetyModerator")
   listings     Product[]
   favorites    Favorite[]
   priceWatches PriceWatch[]
+  savedSearches SavedSearch[]
   notifications Notification[]
   notificationPreference NotificationPreference?
   createdAt    DateTime  @default(now())
@@ -81,6 +86,10 @@ model Notification {
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   watchId   String?
   watch     PriceWatch?      @relation(fields: [watchId], references: [id], onDelete: SetNull)
+  savedSearchId String?
+  savedSearch SavedSearch? @relation(fields: [savedSearchId], references: [id], onDelete: SetNull)
+  conversationId String?
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   type      NotificationType
   title     String
   message   String
@@ -91,6 +100,52 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
   @@index([watchId, createdAt])
+  @@index([savedSearchId, createdAt])
+  @@index([conversationId, userId, readAt])
+}
+
+model SavedSearch {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  q String @default("")
+  category String?
+  commodity Commodity?
+  variety CommodityVariety?
+  grade SellerGrade?
+  country String?
+  location String?
+  unit ListingUnit?
+  minPrice Decimal? @db.Decimal(12, 2)
+  maxPrice Decimal? @db.Decimal(12, 2)
+  sort String @default("relevance")
+  queryCountryCodes String[] @default([])
+  queryCommodities Commodity[] @default([])
+  queryVarieties CommodityVariety[] @default([])
+  queryGrades SellerGrade[] @default([])
+  canonicalKey String
+  enabled Boolean @default(true)
+  lastEvaluatedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  matches SavedSearchMatch[]
+  notifications Notification[]
+
+  @@unique([userId, canonicalKey])
+  @@index([enabled, id])
+  @@index([userId, createdAt])
+}
+
+model SavedSearchMatch {
+  savedSearchId String
+  savedSearch SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  firstMatchedAt DateTime @default(now())
+
+  @@id([savedSearchId, productId])
+  @@index([productId])
 }
 
 model NotificationEmailDelivery {
@@ -124,6 +179,10 @@ enum EmailDeliveryStatus {
 enum NotificationType {
   PRICE_ALERT
   REVIEW_MODERATION
+  NEW_LISTING_MATCH
+  PRIVATE_MESSAGE
+  SAFETY_REPORT
+  DEAL_UPDATE
 }
 
 model NotificationPreference {
@@ -146,10 +205,51 @@ model PriceWatchEvaluationRun {
   notificationsCreated Int                  @default(0)
   watchesSkipped       Int                  @default(0)
   errors               Int                  @default(0)
+  cleanupProcessed     Int                  @default(0)
+  cleanupSucceeded     Int                  @default(0)
+  cleanupFailed        Int                  @default(0)
   durationMs           Int?
 
   @@index([startedAt])
   @@index([status, startedAt])
+}
+
+model CloudAssetCleanupJob {
+  id            String                   @id @default(cuid())
+  ownerId       String
+  publicId      String                   @unique
+  kind          CloudAssetKind
+  status        CloudAssetCleanupStatus @default(PENDING)
+  attempts      Int                      @default(0)
+  nextAttemptAt DateTime                 @default(now())
+  attemptedAt   DateTime?
+  completedAt   DateTime?
+  lastErrorCode String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([createdAt, id])
+}
+
+enum CloudAssetKind {
+  PRODUCT
+  AVATAR
+}
+
+enum CloudAssetCleanupStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model RateLimitBucket {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime
+  expiresAt   DateTime
+
+  @@index([expiresAt])
 }
 
 model PriceWatchEvaluatorLease {
@@ -178,6 +278,8 @@ model Product {
   category    String
   price       Decimal  @db.Decimal(12, 2)
   quantity    Decimal? @db.Decimal(12, 3)
+  originalQuantity Decimal? @db.Decimal(12, 3)
+  remainingQuantity Decimal? @db.Decimal(12, 3)
   unit        ListingUnit?
   status      ListingStatus @default(ACTIVE)
   commodity   Commodity?
@@ -195,6 +297,8 @@ model Product {
   priceSnapshots PriceSnapshot[]
   views ProductView[]
   deals Deal[]
+  savedSearchMatches SavedSearchMatch[]
+  safetyReports SafetyReport[]
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
@@ -203,6 +307,11 @@ model Product {
   @@index([category])
   @@index([location])
   @@index([ownerId])
+  @@index([status, createdAt])
+  @@index([status, price])
+  @@index([status, commodity, variety, grade])
+  @@index([status, country])
+  @@index([status, unit])
 }
 
 model ProductView {
@@ -239,7 +348,7 @@ model PriceSnapshot {
   @@index([normalizedUnit])
   @@index([country, location])
   @@index([productKey, capturedAt])
-  @@index([commodity, variety, grade, normalizedUnit, capturedAt])
+  @@index([commodity, variety, grade, normalizedUnit, capturedAt], map: "PriceSnapshot_cohort_capturedAt_idx")
 }
 
 enum PriceSnapshotReason {
@@ -345,32 +454,48 @@ model Conversation {
   sellerId String
   seller User @relation("Seller", fields: [sellerId], references: [id], onDelete: Cascade)
   messages Message[]
+  notifications Notification[]
+  buyerUnreadCount Int @default(0)
+  sellerUnreadCount Int @default(0)
+  buyerLastReadAt DateTime?
+  sellerLastReadAt DateTime?
   updatedAt DateTime @default(now())
-  deal Deal?
+  deals Deal[]
   @@unique([productId, buyerId])
   @@index([sellerId, updatedAt])
   @@index([buyerId, updatedAt])
+  @@index([buyerId, buyerUnreadCount])
+  @@index([sellerId, sellerUnreadCount])
 }
 
 model Deal {
   id String @id @default(cuid())
   productId String
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  conversationId String @unique
+  conversationId String
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sellerId String
   seller User @relation("DealSeller", fields: [sellerId], references: [id], onDelete: Cascade)
   buyerId String
   buyer User @relation("DealBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  quantity Decimal? @db.Decimal(12, 3)
+  unit ListingUnit?
+  agreedPrice Decimal? @db.Decimal(12, 2)
+  currency String? @db.Char(3)
   status DealStatus @default(PENDING)
   disputeReason String?
   disputedAt DateTime?
+  buyerConfirmedAt DateTime?
+  sellerConfirmedAt DateTime?
+  cancelledAt DateTime?
   createdAt DateTime @default(now())
   completedAt DateTime?
   reviews Review[]
   @@index([sellerId, createdAt])
   @@index([buyerId, createdAt])
+  @@index([conversationId, createdAt])
   @@index([status, createdAt])
+  @@index([status, completedAt])
 }
 
 model Review {
@@ -489,7 +614,10 @@ model Message {
   hidden Boolean @default(false)
   createdAt DateTime @default(now())
   reports MessageReport[]
+  clientMessageId String? @unique
+  safetyReports SafetyReport[]
   @@index([conversationId, createdAt])
+  @@index([conversationId, createdAt, id])
   @@index([country, createdAt])
 }
 
@@ -498,7 +626,64 @@ model UserBlock {
   blockedId String
   blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
   blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
   @@id([blockerId, blockedId])
+}
+
+model SafetyReport {
+  id String @id @default(cuid())
+  reporterId String
+  reporter User @relation("SafetyReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType SafetyReportTarget
+  targetUserId String?
+  targetUser User? @relation("SafetyTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  listingId String?
+  listing Product? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  messageId String?
+  message Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  reason SafetyReportReason
+  note String?
+  status SafetyReportStatus @default(OPEN)
+  dedupeKey String? @unique
+  targetUserName String?
+  listingName String?
+  messageBodySnapshot String?
+  messageAuthorName String?
+  conversationIdSnapshot String?
+  moderatorId String?
+  moderator User? @relation("SafetyModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
+  moderatorNote String?
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([targetType, reason, createdAt])
+  @@index([reporterId, createdAt])
+  @@index([targetUserId])
+  @@index([listingId])
+  @@index([messageId])
+}
+
+enum SafetyReportTarget {
+  USER
+  LISTING
+  MESSAGE
+}
+
+enum SafetyReportReason {
+  HARASSMENT
+  SPAM_OR_SCAM
+  MISLEADING
+  PERSONAL_INFORMATION
+  PROHIBITED_OR_UNSAFE
+  IMPERSONATION
+  OTHER
+}
+
+enum SafetyReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
 }
 
 model MessageReport {

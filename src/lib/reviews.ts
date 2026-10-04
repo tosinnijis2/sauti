@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma, type ReviewModerationReason, type ReviewReportReason, type ReviewReportStatus, type ReviewStatus } from "@prisma/client";
 import { canReview } from "./deals";
 import { prisma } from "./prisma";
+import { isInteractionBlocked } from "./interactions";
 
 export class ReviewError extends Error {}
 const reportReasons = new Set<ReviewReportReason>(["HARASSMENT", "SPAM", "FALSE_INFORMATION", "PERSONAL_INFORMATION", "OFF_TOPIC", "OTHER"]);
@@ -16,6 +17,7 @@ export async function createReview(dealId: string, reviewerId: string, rawRating
   const deal = await prisma.deal.findUnique({ where: { id: dealId }, select: { buyerId: true, sellerId: true } });
   if (!deal || (deal.buyerId !== reviewerId && deal.sellerId !== reviewerId)) throw new ReviewError("This deal is not eligible for review.");
   const targetId = reviewerId === deal.buyerId ? deal.sellerId : deal.buyerId;
+  if (await isInteractionBlocked(reviewerId, targetId)) throw new ReviewError("This review opportunity is unavailable while interaction is blocked.");
   if (!await canReview(reviewerId, dealId, targetId)) throw new ReviewError("This review opportunity is unavailable or already used.");
   try {
     return await prisma.review.create({ data: { dealId, reviewerId, targetId, rating, comment: comment || null } });
@@ -49,7 +51,7 @@ export async function moderateReview(reviewId: string, adminId: string, action: 
   const note = String(rawNote ?? "").trim();
   if (!moderationReasons.has(reason)) throw new ReviewError("Choose a valid moderation reason.");
   if (note.length > 500 || /[<>]/.test(note)) throw new ReviewError("Moderator notes must be plain text up to 500 characters.");
-  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { status: true, reviewerId: true } });
+  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { status: true, reviewerId: true, dealId: true } });
   if (!review || review.status === "REMOVED") throw new ReviewError("This review can no longer be moderated.");
   const now = new Date();
   const status: ReviewStatus = action === "publish" ? "PUBLISHED" : action === "hide" ? "HIDDEN" : "REMOVED";
@@ -57,7 +59,7 @@ export async function moderateReview(reviewId: string, adminId: string, action: 
   return prisma.$transaction(async tx => {
     const updated = await tx.review.update({ where: { id: reviewId }, data: { status, moderatedAt: now, moderatedById: adminId, ...(status === "PUBLISHED" ? { publishedAt: now } : status === "HIDDEN" ? { hiddenAt: now } : { removedAt: now }) } });
     await tx.reviewModerationEvent.create({ data: { reviewId, moderatorId: adminId, moderatorName: admin.name, action: status, reason, note: note || null } });
-    await tx.notification.create({ data: { userId: review.reviewerId, type: "REVIEW_MODERATION", title: status === "PUBLISHED" ? "Your review was published" : `Your review was ${status.toLowerCase()}`, message: status === "PUBLISHED" ? "Your marketplace review is now visible on the seller profile." : `Your marketplace review is no longer public following moderation.`, href: "/deals" } });
+    await tx.notification.create({ data: { userId: review.reviewerId, type: "REVIEW_MODERATION", title: status === "PUBLISHED" ? "Your review was published" : `Your review was ${status.toLowerCase()}`, message: status === "PUBLISHED" ? "Your marketplace review is now visible on the seller profile." : `Your marketplace review is no longer public following moderation.`, href: `/deals#deal-${review.dealId}` } });
     return updated;
   });
 }

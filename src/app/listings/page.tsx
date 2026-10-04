@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { PackagePlus, Pencil } from "lucide-react";
 import { deleteListingAction } from "@/app/actions/listings";
 import { AppShell } from "@/components/app-shell";
 import { DeleteListingButton } from "@/components/delete-listing-button";
@@ -12,6 +12,7 @@ import { ListingStatusControl } from "@/components/listing-status-control";
 import { CommodityMetadata } from "@/components/commodity-metadata";
 import { listingAnalytics } from "@/lib/listing-analytics";
 import { listedDate } from "@/lib/market";
+import { Alert, EmptyState, primaryButtonClass } from "@/components/ui";
 
 export default async function ListingsPage({
   searchParams,
@@ -51,53 +52,30 @@ export default async function ListingsPage({
 
         <Link
           href="/listings/new"
-          className="inline-flex items-center justify-center rounded-xl bg-[#20141d] px-5 py-3 font-bold text-white no-underline hover:bg-[#342330] visited:text-white"
+          className={primaryButtonClass}
         >
           Add product
         </Link>
       </div>
 
       {params.created === "1" && (
-        <div className="mt-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
-          Product added successfully.
-        </div>
+        <div className="mt-6"><Alert tone="success">Product added successfully.</Alert></div>
       )}
 
       {params.updated === "1" && (
-        <div className="mt-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
-          Product updated successfully.
-        </div>
+        <div className="mt-6"><Alert tone="success">Product updated successfully.</Alert></div>
       )}
 
       {params.deleted === "1" && (
-        <div className="mt-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
-          Product deleted successfully.
-        </div>
+        <div className="mt-6"><Alert tone="success">Product deleted successfully.</Alert></div>
       )}
 
       {params.error && (
-        <div role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
-          {params.error}
-        </div>
+        <div className="mt-6"><Alert>{params.error}</Alert></div>
       )}
 
       {products.length === 0 ? (
-        <div className="mt-10 rounded-3xl border border-dashed border-[#d9cccc] bg-white p-12 text-center">
-          <p className="font-semibold text-[#20141d]">
-            You haven&apos;t listed any products yet.
-          </p>
-
-          <p className="mt-2 text-sm text-[#6f626b]">
-            Add your first product to get started.
-          </p>
-
-          <Link
-            href="/listings/new"
-            className="mt-6 inline-flex items-center justify-center rounded-xl bg-[#20141d] px-5 py-3 font-bold text-white no-underline hover:bg-[#342330] visited:text-white"
-          >
-            Add your first product
-          </Link>
-        </div>
+        <div className="mt-10"><EmptyState icon={<PackagePlus size={28} />} title="No listings yet" description="Create your first listing and make it available to buyers." href="/listings/new" action="Create first listing" /></div>
       ) : (
         <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {products.map((product) => (

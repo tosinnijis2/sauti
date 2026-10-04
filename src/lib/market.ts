@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { decimalMoney } from "./decimal";
 
 export const productCardSelect = {
-  id: true, item: true, price: true, quantity: true, unit: true, status: true, category: true, location: true, country: true, imageUrl: true, createdAt: true, ownerId: true,
+  id: true, item: true, price: true, quantity: true, originalQuantity: true, remainingQuantity: true, unit: true, status: true, category: true, location: true, country: true, imageUrl: true, createdAt: true, ownerId: true,
   commodity: true, variety: true, grade: true, packageQuantity: true, packageUnit: true,
   owner: { select: { id: true, name: true, imageUrl: true } },
 } satisfies Prisma.ProductSelect;

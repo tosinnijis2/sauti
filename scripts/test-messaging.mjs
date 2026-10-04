@@ -35,7 +35,7 @@ try {
   assert.ok(!(await visibleMessages(buyer, { country: "UG" })).some(m => m.authorId === seller));
   await prisma.userBlock.create({ data: { blockerId: seller, blockedId: buyer } });
   await assert.rejects(sendChat(buyer, { conversationId: conversation.id }, "Blocked"));
-  assert.equal((await visibleMessages(seller, { conversationId: conversation.id })).length, 0);
+  assert.equal((await visibleMessages(seller, { conversationId: conversation.id })).length, 1, "blocking preserves authorized private conversation history");
   await prisma.product.delete({ where: { id: product.id } });
   assert.equal((await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } })).productId, null);
   const user = await prisma.user.findUniqueOrThrow({ where: { id: buyer } });

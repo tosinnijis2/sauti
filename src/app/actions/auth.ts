@@ -1,12 +1,16 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { createSession, deleteSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { loginSchema, registrationSchema } from "@/lib/validation";
 import { safeAuthReturn } from "@/lib/auth-return";
 import { requestEmailVerification } from "@/lib/email-verification";
+import { cleanupAvatarPhoto, ImageUploadError, uploadAvatarPhoto } from "@/lib/cloudinary";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { tokenDigest } from "@/lib/recovery";
 
 function firstValidationError(error: { issues: Array<{ message: string }> }) {
   return error.issues[0]?.message ?? "Please check the form and try again.";
@@ -32,30 +36,39 @@ export async function registerAction(formData: FormData) {
   }
 
   const { name, email, phone, password, location } = parsed.data;
+  if (!await consumeRateLimit("registration", tokenDigest(email), 5, 60 * 60_000)) authError("/register", "Too many account attempts. Please wait and try again.");
+  const photo = formData.get("profilePhoto");
+  if (photo !== null && (!(photo instanceof File) || (photo.size > 0 && !photo.type))) authError("/register", "Choose a valid profile photo.");
 
   let registrationError = "";
+  let uploaded: { imageUrl: string; imagePublicId: string } | null = null;
+  const userId = randomUUID();
   try {
     const emailOwner = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     const phoneOwner = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
     if (emailOwner) registrationError = "An account with that email already exists. Please sign in or reset your password.";
     else if (phoneOwner) registrationError = "An account with that phone number already exists.";
     else {
+      if (photo instanceof File && photo.size > 0) uploaded = await uploadAvatarPhoto(photo, userId);
       const user = await prisma.user.create({
       data: {
+        id: userId,
         name,
         email,
         phone,
         passwordHash: await bcrypt.hash(password, 12),
         location,
         country: parsed.data.country,
+        ...(uploaded ?? {}),
       },
         select: { id: true },
       });
-      await requestEmailVerification(user.id);
+      try { await requestEmailVerification(user.id); } catch { /* Registration remains valid if delivery is unavailable. */ }
     }
   } catch (error) {
-    console.error("Registration failed", error);
-    registrationError = "We could not create your account. Please try again.";
+    if (uploaded) await cleanupAvatarPhoto({ ownerId: userId, imagePublicId: uploaded.imagePublicId });
+    if (!(error instanceof ImageUploadError)) console.error("Registration failed", error);
+    registrationError = error instanceof ImageUploadError ? error.message : "We could not create your account. Please try again.";
   }
   if (registrationError) authError("/register", registrationError);
 
@@ -75,6 +88,7 @@ export async function loginAction(formData: FormData) {
 
   let loginError = "";
   try {
+    if (!await consumeRateLimit("login", tokenDigest(parsed.data.email), 10, 15 * 60_000)) authError("/login", "Too many sign-in attempts. Please wait and try again.");
     const user = await prisma.user.findUnique({
     where: { email: parsed.data.email },
     select: { id: true, passwordHash: true },

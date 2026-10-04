@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { cleanupUnreferencedPhoto } from "@/lib/listing-image-cleanup";
+import { cleanupAvatarPhoto } from "@/lib/cloudinary";
 
 export const deletionSchema = z.object({
   type: z.enum(["users", "listings", "messages"]),
@@ -12,18 +13,20 @@ export class DeletionError extends Error {}
 
 export async function deleteAdminRecord(adminId: string, input: z.infer<typeof deletionSchema>) {
   const data = deletionSchema.parse(input);
-  const images = await prisma.$transaction(async tx => {
+  const cleanup = await prisma.$transaction(async tx => {
     let images: { ownerId: string; imagePublicId: string | null }[] = [];
+    let avatar: { ownerId: string; imagePublicId: string | null } | null = null;
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${adminId} FOR UPDATE`;
     const admin = await tx.user.findUnique({ where: { id: adminId }, select: { role: true } });
     if (admin?.role !== "ADMIN") throw new DeletionError("Administrator access is required.");
     if (data.type === "users") {
       if (data.id === adminId) throw new DeletionError("You cannot delete your own account.");
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${data.id} FOR UPDATE`;
-      const target = await tx.user.findUnique({ where: { id: data.id }, select: { role: true } });
+      const target = await tx.user.findUnique({ where: { id: data.id }, select: { role: true, imagePublicId: true } });
       if (!target) throw new DeletionError("This user no longer exists.");
       if (target.role === "ADMIN") throw new DeletionError("Administrator accounts cannot be deleted here.");
       images = await tx.product.findMany({ where: { ownerId: data.id }, select: { ownerId: true, imagePublicId: true } });
+      avatar = { ownerId: data.id, imagePublicId: target.imagePublicId };
       await tx.user.delete({ where: { id: data.id } });
     } else if (data.type === "listings") {
       await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${data.id} FOR UPDATE`;
@@ -35,7 +38,8 @@ export async function deleteAdminRecord(adminId: string, input: z.infer<typeof d
       if (!result.count) throw new DeletionError("Message not found or not eligible for moderation.");
     }
     await tx.auditLog.create({ data: { adminId, action: "DELETE", targetType: data.type, targetId: data.id, reason: data.reason } });
-    return images;
+    return { images, avatar };
   });
-  for (const image of images) await cleanupUnreferencedPhoto(image);
+  for (const image of cleanup.images) await cleanupUnreferencedPhoto(image);
+  if (cleanup.avatar) await cleanupAvatarPhoto(cleanup.avatar);
 }

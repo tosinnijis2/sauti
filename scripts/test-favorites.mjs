@@ -69,7 +69,7 @@ try {
   await action("removeFavorite", { productId: product.id }, buyer.cookie);
   await action("removeFavorite", { productId: product.id }, buyer.cookie);
   assert.equal(await prisma.favorite.count({ where: { userId: buyer.id } }), 0);
-  assert.ok((await html("/saved", buyer.cookie)).includes("saved anything yet"));
+  assert.ok((await html("/saved", buyer.cookie)).includes("No saved listings yet"));
   const login = await action("loginAction", { email: buyer.email, password, next: `/market/${product.id}` }, "", base, "/login");
   assert.equal(login.headers.get("location"), `/market/${product.id}`);
   const external = await action("loginAction", { email: buyer.email, password, next: "//evil.invalid" }, "", base, "/login");

@@ -13,6 +13,7 @@ import {
   Tags,
   UserRound,
   Handshake,
+  ListFilter,
   type LucideIcon,
 } from "lucide-react";
 
@@ -67,6 +68,7 @@ const navItems: NavItem[] = [
   { href: "/deals", label: "Deals", mobileLabel: "Deals", icon: Handshake, matches: pathname => pathname === "/deals" },
   { href: "/saved", label: "Saved Listings", mobileLabel: "Saved", icon: Heart, matches: pathname => pathname === "/saved" },
   { href: "/price-watches", label: "Price Watches", mobileLabel: "Watches", icon: ChartNoAxesCombined, matches: pathname => pathname === "/price-watches" },
+  { href: "/saved-searches", label: "Saved Searches", mobileLabel: "Searches", icon: ListFilter, matches: pathname => pathname === "/saved-searches" },
   { href: "/notifications", label: "Notifications", mobileLabel: "Alerts", icon: Bell, matches: pathname => pathname === "/notifications" },
   {
     href: "/profile",
@@ -77,7 +79,7 @@ const navItems: NavItem[] = [
   },
 ];
 
-export function DesktopNavigation({ unreadCount = 0 }: { unreadCount?: number }) {
+export function DesktopNavigation({ unreadCount = 0, unreadMessages = 0 }: { unreadCount?: number; unreadMessages?: number }) {
   const pathname = usePathname();
 
   return (
@@ -100,7 +102,7 @@ export function DesktopNavigation({ unreadCount = 0 }: { unreadCount?: number })
               <span aria-hidden="true" className="absolute left-0 h-6 w-1 rounded-r-full bg-[#fe7a7c]" />
             )}
             <Icon size={20} strokeWidth={active ? 2.5 : 2} className={active ? "text-[#fe7a7c]" : undefined} />
-            <span className="min-w-0 flex-1 truncate">{label}</span>{href === "/notifications" && unreadCount > 0 && <span className="rounded-full bg-[#fe7a7c] px-2 py-0.5 text-xs font-bold text-[#20141d]">{Math.min(unreadCount, 99)}</span>}
+            <span className="min-w-0 flex-1 truncate">{label}</span>{href === "/notifications" && unreadCount > 0 && <span className="rounded-full bg-[#fe7a7c] px-2 py-0.5 text-xs font-bold text-[#20141d]">{Math.min(unreadCount, 99)}</span>}{href === "/messages" && unreadMessages > 0 && <span className="rounded-full bg-[#fe7a7c] px-2 py-0.5 text-xs font-bold text-[#20141d]">{Math.min(unreadMessages, 99)}</span>}
           </Link>
         );
       })}
@@ -108,7 +110,7 @@ export function DesktopNavigation({ unreadCount = 0 }: { unreadCount?: number })
   );
 }
 
-export function MobileNavigation({ unreadCount = 0 }: { unreadCount?: number }) {
+export function MobileNavigation({ unreadCount = 0, unreadMessages = 0 }: { unreadCount?: number; unreadMessages?: number }) {
   const pathname = usePathname();
 
   return (
@@ -117,7 +119,7 @@ export function MobileNavigation({ unreadCount = 0 }: { unreadCount?: number }) 
       className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#20141d]/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(32,20,29,0.18)] backdrop-blur-xl md:hidden"
     >
       <div className="mx-auto grid h-20 max-w-lg grid-cols-5 px-1">
-        {navItems.filter(item => !["/listings", "/saved", "/price-watches", "/profile", "/deals"].includes(item.href)).map(({ href, mobileLabel, icon: Icon, matches, primary }) => {
+        {navItems.filter(item => ["/market", "/listings/new", "/messages", "/notifications", "/profile"].includes(item.href)).map(({ href, mobileLabel, icon: Icon, matches, primary }) => {
           const active = matches(pathname);
 
           return (
@@ -143,6 +145,7 @@ export function MobileNavigation({ unreadCount = 0 }: { unreadCount?: number }) 
               >
                 <Icon size={22} strokeWidth={active ? 2.5 : 2} />
                 {href === "/notifications" && unreadCount > 0 && <span className="absolute right-3 top-3 grid min-w-5 place-items-center rounded-full bg-[#fe7a7c] px-1 text-[10px] font-bold text-[#20141d]">{Math.min(unreadCount, 99)}</span>}
+                {href === "/messages" && unreadMessages > 0 && <span className="absolute right-3 top-3 grid min-w-5 place-items-center rounded-full bg-[#fe7a7c] px-1 text-[10px] font-bold text-[#20141d]">{Math.min(unreadMessages, 99)}</span>}
               </span>
               <span className={`max-w-full truncate ${active ? "font-extrabold" : ""}`}>
                 {mobileLabel}

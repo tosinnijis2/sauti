@@ -3,6 +3,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { z } from "zod";
 import { IMAGE_UPLOAD_ERROR, MAX_IMAGE_BYTES, imageFileError, matchesImageContent } from "./images";
+import { prisma } from "./prisma";
+import { operationalError } from "./operations-log";
 
 export class ImageUploadError extends Error {}
 
@@ -60,6 +62,36 @@ export function ownsImageId(publicId: string, userId: string) {
     /^[a-f0-9-]{36}$/.test(publicId.slice(`sauti/products/${userId}/`.length));
 }
 
+export function ownsAvatarId(publicId: string, userId: string) {
+  return /^[a-zA-Z0-9-]+$/.test(userId) && publicId.startsWith(`sauti/avatars/${userId}/`) &&
+    /^[a-f0-9-]{36}$/.test(publicId.slice(`sauti/avatars/${userId}/`.length));
+}
+
+async function uploadManagedPhoto(file: File, publicId: string) {
+  const error = imageFileError(file);
+  if (error) throw new ImageUploadError(error);
+  if (!matchesImageContent(file.type, new Uint8Array(await file.slice(0, 12).arrayBuffer()))) throw new ImageUploadError("Choose a valid JPG, PNG, or WebP image.");
+  const result = uploadedSchema.safeParse(await cloudRequest("upload", {
+    public_id: publicId, overwrite: "false", allowed_formats: "jpg,png,webp",
+  }, file));
+  if (!result.success || result.data.public_id !== publicId) throw new ImageUploadError(IMAGE_UPLOAD_ERROR);
+  const url = new URL(result.data.secure_url);
+  if (url.origin !== "https://res.cloudinary.com" || !url.pathname.startsWith(`/${config().cloud}/image/upload/`) || !url.pathname.endsWith(`/${publicId}.${result.data.format}`)) {
+    throw new ImageUploadError(IMAGE_UPLOAD_ERROR);
+  }
+  return { imageUrl: result.data.secure_url, imagePublicId: publicId };
+}
+
+export async function uploadAvatarPhoto(file: File, userId: string) {
+  const publicId = `sauti/avatars/${userId}/${randomUUID()}`;
+  try {
+    return await uploadManagedPhoto(file, publicId);
+  } catch (error) {
+    await cleanupAvatarPhoto({ ownerId: userId, imagePublicId: publicId });
+    throw error;
+  }
+}
+
 export async function uploadProductPhoto(file: File, userId: string, target?: { id: string; updatedAt: Date }) {
   const error = imageFileError(file);
   if (error) throw new ImageUploadError(error);
@@ -115,9 +147,52 @@ export async function cleanupProductPhoto(image: { ownerId: string; imagePublicI
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const result = z.object({ result: z.enum(["ok", "not found"]) }).safeParse(await cloudRequest("destroy", { public_id: image.imagePublicId, invalidate: "true" }));
-      if (result.success) return;
+      if (result.success) {
+        await prisma.cloudAssetCleanupJob.updateMany({ where: { publicId: image.imagePublicId }, data: { status: "SUCCEEDED", completedAt: new Date(), lastErrorCode: null } });
+        return;
+      }
     } catch { /* Database changes are committed; retain success and retry cleanup. */ }
     if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 2000));
   }
-  console.warn("Product image cleanup needs retry:", image.imagePublicId);
+  await queueCleanup(image.ownerId, image.imagePublicId, "PRODUCT");
+  console.warn("Product image cleanup queued for retry.");
+}
+
+export async function cleanupAvatarPhoto(image: { ownerId: string; imagePublicId: string | null }) {
+  if (!image.imagePublicId) return;
+  if (!ownsAvatarId(image.imagePublicId, image.ownerId)) {
+    console.warn("Skipped unmanaged profile image cleanup.");
+    return;
+  }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = z.object({ result: z.enum(["ok", "not found"]) }).safeParse(await cloudRequest("destroy", { public_id: image.imagePublicId, invalidate: "true" }));
+      if (result.success) {
+        await prisma.cloudAssetCleanupJob.updateMany({ where: { publicId: image.imagePublicId }, data: { status: "SUCCEEDED", completedAt: new Date(), lastErrorCode: null } });
+        return;
+      }
+    } catch { /* Keep the profile update successful if provider cleanup is transient. */ }
+    if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  await queueCleanup(image.ownerId, image.imagePublicId, "AVATAR");
+  console.warn("Profile image cleanup queued for retry.");
+}
+
+async function queueCleanup(ownerId: string, publicId: string, kind: "PRODUCT" | "AVATAR") {
+  const managed = kind === "PRODUCT" ? ownsImageId(publicId, ownerId) : ownsAvatarId(publicId, ownerId);
+  if (!managed) return;
+  try {
+    await prisma.cloudAssetCleanupJob.upsert({ where: { publicId }, create: { ownerId, publicId, kind }, update: { status: "PENDING", nextAttemptAt: new Date(), completedAt: null, lastErrorCode: null } });
+  } catch {
+    operationalError("cloud-cleanup-enqueue-failed", { ownerId, kind });
+  }
+}
+
+export async function destroyManagedCloudAsset(ownerId: string, publicId: string, kind: "PRODUCT" | "AVATAR") {
+  const managed = kind === "PRODUCT" ? ownsImageId(publicId, ownerId) : ownsAvatarId(publicId, ownerId);
+  if (!managed) return false;
+  try {
+    const result = z.object({ result: z.enum(["ok", "not found"]) }).safeParse(await cloudRequest("destroy", { public_id: publicId, invalidate: "true" }));
+    return result.success;
+  } catch { return false; }
 }

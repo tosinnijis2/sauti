@@ -15,6 +15,7 @@ const links = [
   { href: "/admin/evaluations", label: "Evaluator runs", icon: ChartNoAxesCombined },
   { href: "/admin/deals", label: "Disputed deals", icon: Handshake },
   { href: "/admin/reviews", label: "Review moderation", icon: Star },
+  { href: "/admin/reports", label: "Safety reports", icon: Bell },
   { href: "/market", label: "Marketplace", icon: Store },
 ];
 

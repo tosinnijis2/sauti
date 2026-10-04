@@ -10,6 +10,7 @@ import { UNIT_VALUES, UNIT_RULES, PACKAGE_UNITS, CONTENT_UNITS, STATUS_VALUES, S
 import { CommodityFields, type CommodityDefaults } from "./commodity-fields";
 import { IMAGE_UPLOAD_ERROR } from "@/lib/images";
 import { ListingImageField, type PhotoSelection } from "./listing-image-field";
+import { fieldClass, primaryButtonClass, secondaryButtonClass, Alert } from "./ui";
 
 type ListingDefaults = CommodityDefaults & {
   imageUrl?: string | null;
@@ -19,6 +20,9 @@ type ListingDefaults = CommodityDefaults & {
   location: string;
   price: string;
   quantity?: string | null;
+  originalQuantity?: string | null;
+  remainingQuantity?: string | null;
+  soldQuantity?: string | null;
   unit?: Unit | null;
   status?: Status;
   packageQuantity?: string | null;
@@ -32,9 +36,6 @@ type ListingFormProps = {
   submitLabel: string;
   defaults?: ListingDefaults;
 };
-
-const fieldClass =
-  "rounded-xl border border-[#eadfdf] px-4 py-3 outline-none transition focus:border-[#fe7a7c]";
 
 export function ListingForm({ action, submitLabel, defaults, productId }: ListingFormProps) {
   const router = useRouter();
@@ -92,8 +93,9 @@ export function ListingForm({ action, submitLabel, defaults, productId }: Listin
   return (
     <form onSubmit={event => { event.preventDefault(); void submit(new FormData(event.currentTarget)); }} aria-busy={busy} className="mt-8 max-w-2xl border-y border-[#eadfdf] py-7">
       <fieldset disabled={busy} className="grid min-w-0 gap-5">
+      <section aria-labelledby="listing-basics" className="grid min-w-0 gap-5">
+      <header><h2 id="listing-basics" className="text-xl font-bold">Listing basics</h2><p className="mt-1 text-sm text-[#6f626b]">Help buyers identify exactly what you are offering.</p></header>
       <ListingImageField defaultValue={defaults?.imageUrl} value={photo} disabled={busy} onChange={selection => { receipt.current = null; setPhoto(selection); setError(""); }} />
-      <CountrySelect value={defaults?.country} />
       <label className="grid gap-2 text-sm font-bold text-[#20141d]">
         Product name
         <input name="item" type="text" className={fieldClass} defaultValue={defaults?.item} maxLength={120} required />
@@ -110,17 +112,27 @@ export function ListingForm({ action, submitLabel, defaults, productId }: Listin
       </label>
 
       <CommodityFields defaults={defaults} />
+      </section>
+
+      <section aria-labelledby="listing-availability" className="grid min-w-0 gap-5 border-t border-[#eadfdf] pt-6">
+      <header><h2 id="listing-availability" className="text-xl font-bold">Availability</h2><p className="mt-1 text-sm text-[#6f626b]">Set where the item is available and the total quantity buyers can discuss.</p></header>
+      <CountrySelect value={defaults?.country} />
       <label className="grid gap-2 text-sm font-bold text-[#20141d]">
         Location
         <input name="location" type="text" className={fieldClass} defaultValue={defaults?.location} maxLength={120} required />
       </label>
 
       {productId && !defaults?.quantity && <p className="text-sm text-[#6f626b]">Quantity and unit are missing on this older listing. Comparable price insights require both and a structured commodity.</p>}
+      {productId && defaults?.unit && defaults.originalQuantity && defaults.remainingQuantity && <p className="rounded-lg bg-[#edf1ef] p-3 text-sm text-[#31564a]"><strong>Inventory:</strong> {defaults.originalQuantity} {UNIT_RULES[defaults.unit].label} listed · {defaults.soldQuantity ?? "0"} sold · {defaults.remainingQuantity} available. Enter total inventory below; it cannot be lower than completed sales.</p>}
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
-        <label className="grid min-w-0 gap-2 text-sm font-bold">Quantity<input name="quantity" type="number" min="0.001" max="999999999.999" step="0.001" className={fieldClass + " min-w-0"} defaultValue={defaults?.quantity ?? ""} required={!productId || Boolean(defaults?.quantity)} /></label>
+        <label className="grid min-w-0 gap-2 text-sm font-bold">{productId ? "Total inventory" : "Quantity"}<input name="quantity" type="number" min="0.001" max="999999999.999" step="0.001" className={fieldClass + " min-w-0"} defaultValue={defaults?.quantity ?? ""} required={!productId || Boolean(defaults?.quantity)} /></label>
         <label className="grid min-w-0 gap-2 text-sm font-bold">Unit<select name="unit" className={fieldClass + " min-w-0"} value={unit} onChange={event => setUnit(event.target.value as Unit | "")} required={!productId || Boolean(defaults?.quantity)}><option value="">Select unit</option>{UNIT_VALUES.map(unit => <option key={unit} value={unit}>{UNIT_RULES[unit].label}</option>)}</select></label>
       </div>
       {unit && PACKAGE_UNITS.includes(unit) && <section key={unit} className="grid min-w-0 gap-4 border-y border-[#eadfdf] py-5" aria-label="Package contents"><h2 className="text-lg font-bold">Contents per {UNIT_RULES[unit].label} <span className="text-sm font-normal text-[#6f626b]">(optional)</span></h2><div className="grid min-w-0 gap-4 sm:grid-cols-2"><label className="grid min-w-0 gap-2 text-sm font-bold">Quantity per package<input name="packageQuantity" type="number" min="0.001" step="0.001" max="999999999.999" defaultValue={unit === defaults?.unit ? defaults.packageQuantity ?? "" : ""} className={fieldClass + " min-w-0"} /></label><label className="grid min-w-0 gap-2 text-sm font-bold">Contents unit<select name="packageUnit" defaultValue={unit === defaults?.unit ? defaults.packageUnit ?? "" : ""} className={fieldClass + " min-w-0"}><option value="">Unspecified</option>{CONTENT_UNITS.map(value => <option key={value} value={value}>{UNIT_RULES[value].label}</option>)}</select></label></div><p className="text-xs text-[#6f626b]">Contents apply to each {UNIT_RULES[unit].label}. No package weight is assumed when unspecified.</p></section>}
+      </section>
+
+      <section aria-labelledby="listing-terms" className="grid min-w-0 gap-5 border-t border-[#eadfdf] pt-6">
+      <header><h2 id="listing-terms" className="text-xl font-bold">Asking price and details</h2><p className="mt-1 text-sm text-[#6f626b]">The asking price applies to the full quantity above. A later deal may use a different agreed price.</p></header>
       <label className="grid gap-2 text-sm font-bold text-[#20141d]">
         Total price for this quantity (USD)
         <input name="price" type="number" step="0.01" min="0.01" max="9999999999.99" className={fieldClass} defaultValue={defaults?.price} required />
@@ -132,18 +144,19 @@ export function ListingForm({ action, submitLabel, defaults, productId }: Listin
         Description
         <textarea name="description" rows={5} className={fieldClass} defaultValue={defaults?.description} maxLength={2000} required />
       </label>
+      </section>
 
       <div className="flex flex-wrap gap-3">
-        <button type="submit" className="rounded-xl bg-[#20141d] px-5 py-3 font-bold text-white transition hover:bg-[#342330]">
+        <button type="submit" className={primaryButtonClass}>
           {submitLabel}
         </button>
-        {!busy && <Link href="/listings" className="rounded-xl border border-[#d9cccc] px-5 py-3 font-bold text-[#20141d] hover:bg-[#fff4f1]">
+        {!busy && <Link href="/listings" className={secondaryButtonClass}>
           Cancel
         </Link>}
       </div>
       </fieldset>
       <div role="status" aria-live="polite" className="mt-4 text-sm">{status && <span className="flex items-center gap-2"><LoaderCircle size={18} className="motion-safe:animate-spin" />{status}</span>}{status === "Uploading photo..." && <progress className="mt-2 w-full" aria-label="Photo transfer progress" value={progress} max={100} />}</div>
-      {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+      {error && <div className="mt-3"><Alert>{error}</Alert></div>}
     </form>
   );
 }

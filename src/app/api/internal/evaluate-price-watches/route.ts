@@ -17,5 +17,5 @@ export async function POST(request: Request) {
   if (!process.env.CRON_SECRET || process.env.CRON_SECRET.length < 32) return Response.json({ error: "Scheduler endpoint is not configured." }, { status: 503 });
   if (!authorized(request)) return Response.json({ error: "Unauthorized." }, { status: 401 });
   const result = await runPriceWatchEvaluation({ source: "SCHEDULED" });
-  return Response.json({ runId: result.runId, status: result.status, acquired: result.acquired, summary: result.summary }, { status: result.status === "FAILED" ? 500 : 200 });
+  return Response.json({ runId: result.runId, status: result.status, acquired: result.acquired, summary: result.summary, cleanup: result.cleanup }, { status: result.status === "FAILED" ? 500 : 200 });
 }

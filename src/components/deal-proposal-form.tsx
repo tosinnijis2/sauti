@@ -1,0 +1,12 @@
+"use client";
+import { useState } from "react";
+import type { ListingUnit } from "@prisma/client";
+import { createDealAction } from "@/app/actions/deals";
+import { UNIT_RULES } from "@/lib/units";
+import { fieldClass, primaryButtonClass } from "@/components/ui";
+
+export function DealProposalForm({ conversationId, available, unit, askingPrice, askingQuantity }: { conversationId: string; available: string; unit: ListingUnit; askingPrice?: string; askingQuantity?: string }) {
+  const [quantity, setQuantity] = useState(""); const [price, setPrice] = useState("");
+  const numericQuantity = Number(quantity); const numericPrice = Number(price); const effective = numericQuantity > 0 && numericPrice > 0 ? numericPrice / numericQuantity : null;
+  return <form action={createDealAction} className="grid gap-4"><input type="hidden" name="conversationId" value={conversationId} /><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-bold">Quantity to sell <span className="font-normal text-[#6f626b]">{available} {UNIT_RULES[unit].label} available</span><input name="quantity" value={quantity} onChange={event => setQuantity(event.target.value)} type="number" min="0.001" max={available} step="0.001" required className={fieldClass} /></label><label className="grid gap-1 text-xs font-bold">Agreed total price <span className="font-normal text-[#6f626b]">USD</span><input name="agreedPrice" value={price} onChange={event => setPrice(event.target.value)} type="number" min="0.01" step="0.01" required className={fieldClass} /></label></div><section aria-live="polite" className="border-y border-[#eadfdf] py-3 text-sm"><p className="font-bold">Review proposal</p><p className="mt-2">{quantity || "0"} {UNIT_RULES[unit].label} · ${price || "0.00"} agreed</p><p className="mt-1 text-[#6f626b]">Effective unit price: {effective ? `$${effective.toFixed(2)}/${UNIT_RULES[unit].label}` : "Enter quantity and price"}</p>{askingPrice && askingQuantity && <p className="mt-1 text-[#6f626b]">Listing asks ${askingPrice} for {askingQuantity} {UNIT_RULES[unit].label}.</p>}<p className="mt-2 text-xs text-[#6f626b]">This records agreed marketplace terms and does not confirm payment.</p></section><label className="flex items-start gap-2 text-sm"><input type="checkbox" required className="mt-1 size-5" /><span>I confirm the quantity and agreed price are correct.</span></label><button className={`${primaryButtonClass} w-fit`}>Propose deal</button></form>;
+}

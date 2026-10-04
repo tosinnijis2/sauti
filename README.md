@@ -53,13 +53,11 @@ real Cloudinary through the running app. Both live suites upload generated test
 images and clean up their own records/assets; credentials are never printed.
 
 Replacement/removal/deletion commits database changes before asset cleanup.
-Failed cleanup is retried once and logs only the Sauti asset ID. For a logged,
-unreferenced old asset, operators can use
-`node scripts/retry-image-cleanup.mjs OWNER_ID PUBLIC_ID` with network access.
-This refuses assets still referenced by any listing. Uploads interrupted after
-Cloudinary succeeds but before receipt delivery or listing save can leave orphans;
-there is no durable cleanup queue yet. See `docs/product-image-upload.md` for the
-complete change inventory, security boundaries and verification results.
+Provider failures create durable cleanup jobs. The shared scheduled evaluator
+retries due jobs with bounded exponential backoff and moves a job to `FAILED`
+after five attempts. Every attempt revalidates the Sauti-owned public ID and
+checks current listing/profile references before deletion. Administrators can
+inspect backlog and terminal failures at `/admin/evaluations`.
 
 ## Favorites and personalized dashboard (Phase 2)
 
@@ -227,3 +225,42 @@ The full route and migration plan is in `docs/admin-plan.md`. Fine-grained admin
 roles, other management operations and commerce workflows remain later phases.
 The HTTP integration suite also tests admin authorization, role revocation, search
 validation, and sensitive-field exclusion.
+
+## Production operations
+
+Production startup validates these server-only variables without logging values:
+`DATABASE_URL`, `AUTH_SECRET` (at least 32 characters),
+`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`,
+`CRON_SECRET` (at least 32 characters), `RESEND_API_KEY`, `EMAIL_FROM`, and
+an HTTPS `APP_URL`. Resend requires `EMAIL_FROM` to be a verified sender or domain.
+Cloudinary must allow signed image upload, resource lookup, and destroy operations.
+
+Deploy with:
+
+```powershell
+node node_modules/prisma/build/index.js migrate deploy
+node node_modules/prisma/build/index.js generate
+npm run build
+npm run start
+```
+
+Invoke `POST /api/internal/evaluate-price-watches` every 30 minutes with
+`Authorization: Bearer <CRON_SECRET>`. This single leased job evaluates price
+watches and saved searches, processes email retries in the existing delivery path,
+retries Cloudinary cleanup, and prunes expired rate-limit buckets. The admin
+operations page reports run duration, counts, skipped/locked invocations, stale
+scheduling, and cleanup failures. `GET /api/health` returns only minimal liveness
+and readiness state; detailed diagnostics remain admin-only.
+
+Before promotion, verify `prisma migrate status`, `/api/health`, and one recent
+successful scheduled run. `npm run db:migrate` runs `prisma migrate dev` and is for
+local development only; deploy with `migrate deploy`. Database migrations are
+additive, but application and schema rollback must still be coordinated: restore the
+prior app first, retain new tables/columns, and avoid destructive down migrations.
+Cloudinary deletion is irreversible after a cleanup job succeeds, while failed jobs
+remain inspectable. Public seller trust signals and listing analytics read a bounded
+recent sample, and scheduled price-watch evaluation runs in cursor-paged batches, so
+no public page or scheduled run scales its memory with total history.
+Use `docs/phase-26-production-pilot-readiness.md` for the staging pilot checklist,
+the backup/restore procedure, and the record of what remains blocked without a real
+staging environment.

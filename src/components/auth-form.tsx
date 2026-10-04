@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { loginSchema, registrationSchema } from "@/lib/validation";
+import { Alert, primaryButtonClass } from "@/components/ui";
 
 export function AuthForm({ mode, action, error, children }: {
   mode: "login" | "register";
@@ -23,13 +24,13 @@ export function AuthForm({ mode, action, error, children }: {
     }
   }}>
     {children}
-    {message && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{message}</p>}
+    {message && <Alert>{message}</Alert>}
   </form>;
 }
 
 export function AuthSubmit({ login }: { login: boolean }) {
   const { pending } = useFormStatus();
-  return <button type="submit" disabled={pending} aria-busy={pending} className="mt-2 rounded-xl bg-[#20141d] px-4 py-3 font-bold text-white transition hover:bg-[#342330] disabled:opacity-60">
+  return <button type="submit" disabled={pending} aria-busy={pending} className={`${primaryButtonClass} mt-2 w-full`}>
     {pending ? (login ? "Signing in..." : "Creating account...") : (login ? "Sign in" : "Create account")}
   </button>;
 }

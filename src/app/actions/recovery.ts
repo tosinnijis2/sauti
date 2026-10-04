@@ -5,10 +5,12 @@ import { issueReset, redeemReset, tokenDigest } from "@/lib/recovery";
 import { prisma } from "@/lib/prisma";
 import { deleteSession } from "@/lib/auth";
 import { emailIsConfigured, sendEmail } from "@/lib/email";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 export async function requestReset(form: FormData) {
   const email = z.string().trim().toLowerCase().email().max(254).safeParse(form.get("email"));
   if (!email.success) redirect("/forgot-password?error=Enter+a+valid+email+address.");
+  if (!await consumeRateLimit("password-recovery", tokenDigest(email.data), 3, 60 * 60_000)) redirect("/forgot-password?sent=1");
   const { APP_URL } = process.env;
   if (!emailIsConfigured() || !APP_URL) redirect("/forgot-password?error=Password+recovery+email+is+currently+unavailable.");
   let token: string | null = null;

@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = file => readFileSync(file, "utf8");
+const ui = read("src/components/ui.tsx");
+const nav = read("src/components/app-navigation.tsx");
+const dashboard = read("src/app/dashboard/page.tsx");
+const dashboardData = read("src/lib/dashboard.ts");
+const globals = read("src/app/globals.css");
+const layout = read("src/app/layout.tsx");
+const listingForm = read("src/components/listing-form.tsx");
+const authForm = read("src/components/auth-form.tsx");
+const saved = read("src/app/saved/page.tsx");
+const messages = read("src/app/messages/page.tsx");
+const listings = read("src/app/listings/page.tsx");
+
+for (const primitive of ["fieldClass", "primaryButtonClass", "secondaryButtonClass", "Card", "Badge", "Alert", "EmptyState", "Skeleton"]) assert.ok(ui.includes(primitive), `missing shared primitive ${primitive}`);
+for (const path of ["/market", "/listings/new", "/messages", "/notifications", "/profile"]) assert.ok(nav.includes(`"${path}"`), `mobile navigation missing ${path}`);
+assert.match(nav, /filter\(item => \["\/market", "\/listings\/new", "\/messages", "\/notifications", "\/profile"\]/, "mobile navigation stays limited to five primary destinations");
+for (const state of ["!user.imageUrl", "!user.emailVerifiedAt", "data.listingCount === 0", "data.savedSearchCount === 0"]) assert.ok(dashboard.includes(state), `first-run task is not state-backed: ${state}`);
+assert.match(dashboardData, /prisma\.savedSearch\.count/);
+assert.match(globals, /prefers-reduced-motion/);
+assert.match(globals, /font-family: Arial, Helvetica, sans-serif/);
+assert.ok(!layout.includes("next/font/google"), "production builds must not depend on fetching Google Fonts");
+assert.ok(listingForm.includes("fieldClass") && listingForm.includes("Alert") && listingForm.includes("aria-busy"));
+assert.ok(authForm.includes("fieldClass") || read("src/components/auth-card.tsx").includes("fieldClass"));
+for (const source of [saved, messages, listings]) assert.ok(source.includes("EmptyState"), "major empty state must use the shared actionable pattern");
+for (const source of [dashboard, listingForm, saved, messages, listings]) assert.ok(!source.includes("rounded-3xl"), "oversized card radius remains in a core workflow");
+assert.match(read("src/components/product-image.tsx"), /sizes=|sizes \?/); assert.match(read("src/components/product-image.tsx"), /motion-reduce/);
+console.log("PASS UX COHESION: shared primitives, focused mobile navigation, real-state first run, actionable empty states, reduced motion, consistent forms, and responsive image safeguards.");

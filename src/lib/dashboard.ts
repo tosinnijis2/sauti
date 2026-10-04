@@ -3,13 +3,17 @@ import { prisma } from "./prisma";
 import { productCardSelect } from "./market";
 import { savedProductIds } from "./favorites";
 import { listingAnalytics } from "./listing-analytics";
+import { dealsAwaitingConfirmationWhere } from "./deals";
+import { unreadConversationCount } from "./chat";
+import { isInteractionBlocked } from "./interactions";
 
 export async function dashboardData(userId: string, country: string | null) {
   const membership = { OR: [{ buyerId: userId }, { sellerId: userId }] };
   const visible = { hidden: false, author: { blockedBy: { none: { blockerId: userId } } } };
-  const [listingCount, savedCount, conversationCount, listings, favorites, fresh, conversations, community] = await Promise.all([
+  const [listingCount, savedCount, savedSearchCount, conversationCount, listings, favorites, fresh, conversations, community] = await Promise.all([
     prisma.product.count({ where: { ownerId: userId } }),
     prisma.favorite.count({ where: { userId } }),
+    prisma.savedSearch.count({ where: { userId } }),
     prisma.conversation.count({ where: membership }),
     prisma.product.findMany({ where: { ownerId: userId }, select: productCardSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 3 }),
     prisma.favorite.findMany({ where: { userId }, select: { product: { select: productCardSelect } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 3 }),
@@ -23,5 +27,11 @@ export async function dashboardData(userId: string, country: string | null) {
   ]);
   const [saved, sellingAnalytics] = await Promise.all([savedProductIds(userId, fresh.map(product => product.id)), listingAnalytics(userId)]);
   const sellerPerformance = { active: sellingAnalytics.filter(item => item.status === "ACTIVE").length, views: sellingAnalytics.reduce((total, item) => total + item.views, 0), saves: sellingAnalytics.reduce((total, item) => total + item.saves, 0), conversations: sellingAnalytics.reduce((total, item) => total + item.conversations, 0) };
-  return { listingCount, savedCount, conversationCount, listings, favorites, fresh, conversations, community, saved, sellerPerformance };
+  const [unreadConversations, waitingConfirmations, reviewCandidates] = await Promise.all([
+    unreadConversationCount(userId),
+    prisma.deal.count({ where: dealsAwaitingConfirmationWhere(userId) }),
+    prisma.deal.findMany({ where: { status: "COMPLETED", OR: [{ buyerId: userId }, { sellerId: userId }], reviews: { none: { reviewerId: userId } } }, select: { buyerId: true, sellerId: true } }),
+  ]);
+  const reviewEligible = (await Promise.all(reviewCandidates.map(async deal => !await isInteractionBlocked(userId, deal.buyerId === userId ? deal.sellerId : deal.buyerId)))).filter(Boolean).length;
+  return { listingCount, savedCount, savedSearchCount, conversationCount, listings, favorites, fresh, conversations, community, saved, sellerPerformance, marketplaceActivity: { unreadConversations, waitingConfirmations, reviewEligible, activeListings: sellerPerformance.active } };
 }

@@ -3,7 +3,7 @@ import { marketFiltersSchema } from "./market-filters";
 import { COMPARISON_UNITS } from "./units";
 import { COMMODITIES, VARIETIES, GRADES } from "./commodities";
 
-export const insightFiltersSchema = marketFiltersSchema.extend({
+export const insightFiltersSchema = marketFiltersSchema.pick({ q: true, category: true, country: true, location: true, page: true }).extend({
   unit: z.enum(COMPARISON_UNITS).catch("KG"),
   commodity: z.union([z.enum(COMMODITIES), z.literal("")]).catch(""),
   variety: z.union([z.enum(VARIETIES), z.literal("")]).catch(""),

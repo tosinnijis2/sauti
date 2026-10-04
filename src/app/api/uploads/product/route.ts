@@ -3,9 +3,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ImageUploadError, uploadProductPhoto } from "@/lib/cloudinary";
 import { IMAGE_UPLOAD_ERROR, MAX_IMAGE_BYTES } from "@/lib/images";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
-const attempts = new Map<string, { count: number; expires: number }>();
 const bodyLimit = MAX_IMAGE_BYTES + 65536;
 
 export async function POST(request: NextRequest) {
@@ -14,11 +14,7 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return reply({ error: "Please sign in to upload a photo." }, 401);
   if (!request.headers.get("content-type")?.startsWith("multipart/form-data;")) return reply({ error: "Choose a photo to upload." }, 400);
-  const now = Date.now();
-  for (const [key, value] of attempts) if (value.expires < now) attempts.delete(key);
-  const quota = attempts.get(user.id) ?? { count: 0, expires: now + 10 * 60_000 };
-  if (quota.count >= 20 || attempts.size >= 5000) return reply({ error: "Too many upload attempts. Please wait a few minutes." }, 429);
-  attempts.set(user.id, { ...quota, count: quota.count + 1 });
+  if (!await consumeRateLimit("product-upload", user.id, 20, 10 * 60_000)) return reply({ error: "Too many upload attempts. Please wait a few minutes." }, 429);
   if (Number(request.headers.get("content-length")) > bodyLimit) return reply({ error: "Photo must be smaller than 5 MB." }, 413);
   try {
     // Bound the actual stream too; Content-Length is not a trusted size limit.

@@ -4,6 +4,12 @@ import { prisma } from "./prisma";
 
 const key = (value: string) => createHash("sha256").update(value).digest("hex");
 
+// Public seller trust signals are computed from a bounded recent sample so a busy
+// seller's profile page never loads an unbounded conversation/message history.
+const TRUST_SAMPLE_CONVERSATIONS = 200;
+const TRUST_SAMPLE_MESSAGES = 200;
+const TRUST_SAMPLE_LISTINGS = 200;
+
 export async function recordListingView(productId: string, viewerId: string | null, anonymousId: string) {
   const product = await prisma.product.findUnique({ where: { id: productId }, select: { ownerId: true } });
   if (!product || product.ownerId === viewerId) return false;
@@ -15,7 +21,7 @@ export async function recordListingView(productId: string, viewerId: string | nu
 export function newAnonymousViewerId() { return randomBytes(24).toString("hex"); }
 
 export async function listingAnalytics(ownerId: string) {
-  const products = await prisma.product.findMany({ where: { ownerId }, select: { id: true, item: true, status: true, createdAt: true, _count: { select: { views: true, favorites: true, conversations: { where: { buyerId: { not: ownerId } } } } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+  const products = await prisma.product.findMany({ where: { ownerId }, select: { id: true, item: true, status: true, createdAt: true, _count: { select: { views: true, favorites: true, conversations: { where: { buyerId: { not: ownerId } } } } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: TRUST_SAMPLE_LISTINGS });
   return products.map(product => ({ id: product.id, item: product.item, status: product.status, createdAt: product.createdAt, views: product._count.views, saves: product._count.favorites, conversations: product._count.conversations }));
 }
 
@@ -23,7 +29,7 @@ export async function sellerTrustData(sellerId: string) {
   const [seller, statusCounts, conversations, completedDeals, reviewStats] = await Promise.all([
     prisma.user.findUnique({ where: { id: sellerId }, select: { emailVerifiedAt: true, createdAt: true, name: true, location: true, country: true, imageUrl: true } }),
     prisma.product.groupBy({ by: ["status"], where: { ownerId: sellerId }, _count: { _all: true } }),
-    prisma.conversation.findMany({ where: { sellerId }, select: { buyerId: true, messages: { select: { authorId: true, createdAt: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } } }),
+    prisma.conversation.findMany({ where: { sellerId }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: TRUST_SAMPLE_CONVERSATIONS, select: { buyerId: true, messages: { select: { authorId: true, createdAt: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: TRUST_SAMPLE_MESSAGES } } }),
     prisma.deal.count({ where: { sellerId, status: "COMPLETED" } }),
     prisma.review.aggregate({ where: { targetId: sellerId, status: "PUBLISHED" }, _count: { _all: true }, _avg: { rating: true } }),
   ]);
