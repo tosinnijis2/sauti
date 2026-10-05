@@ -81,6 +81,19 @@ try {
     APP_URL: "https://staging.sauti.example",
   });
   assert.equal(envResult.valid, true);
+  assert.deepEqual(envResult.warnings, []);
+
+  const coreOnlyEnvResult = validateProductionEnvironment({
+    NODE_ENV: "production",
+    DATABASE_URL: "present",
+    AUTH_SECRET: "a".repeat(32),
+    CLOUDINARY_CLOUD_NAME: "present",
+    CLOUDINARY_API_KEY: "present",
+    CLOUDINARY_API_SECRET: "present",
+    CRON_SECRET: "b".repeat(32),
+  });
+  assert.equal(coreOnlyEnvResult.valid, true);
+  assert.ok(coreOnlyEnvResult.warnings.some(item => item.includes("Email delivery disabled")));
 
   const invalidCleanup = await prisma.cloudAssetCleanupJob.create({ data: { ownerId: marker, publicId: `unmanaged/${marker}`, kind: "PRODUCT", nextAttemptAt: new Date(now.getTime() - 1000) } });
   cleanupJobIds.push(invalidCleanup.id);

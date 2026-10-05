@@ -7,18 +7,25 @@ does not add marketplace features, reset data, or create fake provider success.
 
 Verify presence only. Never print values.
 
+Core runtime variables:
+
 - `DATABASE_URL`
 - `AUTH_SECRET`
 - `CLOUDINARY_CLOUD_NAME`
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
 - `CRON_SECRET`
+
+Email delivery variables:
+
 - `RESEND_API_KEY`
 - `EMAIL_FROM`
 - `APP_URL`
 
-`AUTH_SECRET` and `CRON_SECRET` must be at least 32 characters. `APP_URL` must be
-the public HTTPS staging origin. `EMAIL_FROM` must be verified in Resend.
+`AUTH_SECRET` and `CRON_SECRET` must be at least 32 characters. Email delivery is
+disabled until all email delivery variables are present. `APP_URL` must be the
+public HTTPS staging origin when email is enabled. `EMAIL_FROM` must be verified
+in Resend.
 
 ## Pre-deploy
 
@@ -80,9 +87,11 @@ Use `npm run build` and `npm run start` when npm is healthy on the host.
 command. Never use it against staging: it can create migrations and prompt for a
 reset. Deployment must use `migrate deploy`, which only applies existing migrations.
 
-Production startup fails fast when a required variable is missing or malformed. It
-names the offending keys and never prints their values, so a misconfigured deploy
-refuses to serve rather than running degraded.
+Production startup fails fast when a core runtime variable is missing or
+malformed. It names the offending keys and never prints their values, so a
+misconfigured deploy refuses to serve rather than running with broken database,
+auth, Cloudinary, or scheduler access. Missing email delivery variables are
+reported as warnings and email-only features remain disabled.
 
 ## Post-deploy
 
@@ -158,8 +167,9 @@ are the priority; a public page must not scale its payload with a seller's histo
 Local results. Staging was not available, so no provider success is claimed here.
 
 - Production build succeeds; 35 routes.
-- Production start refuses to serve when a required variable is missing or when
-  `APP_URL` is not HTTPS, naming only the offending keys.
+- Production start refuses to serve when a core runtime variable is missing,
+  naming only the offending keys. Missing email delivery variables produce a
+  warning and keep email-only features disabled.
 - `prisma validate`, `prisma generate` and `prisma migrate status` all succeed
   against the local database with 31 migrations applied.
 - Security headers are served on every response; the session cookie is `HttpOnly`,
